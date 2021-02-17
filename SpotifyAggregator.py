@@ -15,16 +15,17 @@ playlists = []
 tracks = []
 
 class Track(object):
-     def __init__(self,name,id,artists,track_number,href):
+     def __init__(self,name,id,artists,plist_id,href,album_id):
           self.name=name
           self.id=id
           self.artists=artists
-          self.track_number=track_number
+          self.plist_id=plist_id
           self.href=href
+          self.album_id=album_id
 
 class Playlist(object):
-      def __init__(self,name,id,href):
-        self.id=id
+      def __init__(self,name,plist_id,href):
+        self.plist_id=plist_id
         self.name=name
         self.href=href
 
@@ -83,7 +84,6 @@ class PlaylistAggregator(object):
          url='https://api.spotify.com/v1/albums/' + albumID
          response=requests.get(url,headers=headers)
          responseJson=response.json()
-         #print(responseJson)
          print(responseJson['genres'])
     
     def getSongsMatchingParameters(self):
@@ -140,35 +140,49 @@ class PlaylistAggregator(object):
                          plist_id=item['id']
                url='https://api.spotify.com/v1/playlists/' + plist_id + '/tracks'
                getPlaylist=requests.get(url,headers=headers,params=params)
-               requests.raise_for_status()
+               #requests.raise_for_status()
                playlistJson=getPlaylist.json()
                items = playlistJson['items']
                for item in items:
                     print(f"Track - {i}: ")
-                    artists=item['track']['artists']
-                    name=''
-                    for artist in artists:
-                         name = name + artist['name'] + " "
-                    print(name, "- " + item['track']['name'], " " + item['track']['id'])
+                    all_artists=item['track']['artists']
+                    artists=''
+                    track=item['track']
+                    for artist in all_artists:
+                         artists = artists + artist['name'] + " "
+                    track_obj=Track(track['name'],track['id'],artists,plist_id,track['href'],track['album']['id'])
+                    tracks.append(track_obj)
                     i=i+1
           except requests.exceptions.HTTPError as err:
                print(err.response.text)
           except requests.exceptions.ConnectionError as err:
                print(err.response.text)
+
           offset=offset +100
+    def updateTracks(self):
+         for track in tracks:
+
+           query="SELECT EXISTS(SELECT id FROM tracks WHERE id = %s)"
+           mycursor.execute(query,(track.id,))
+           results=mycursor.fetchone()
+           count=results[0]
+           if count == 0:
+               mycursor.execute("INSERT INTO tracks (plist_id,name,href,id,album_id,artists) VALUES (%s,%s,%s,%s,%s,%s)",(track.plist_id,track.name,track.href,track.id,track.album_id,track.artists))
+               db.commit()
+         print("------Tracks Updated--------")      
 
     def updatePlaylists(self):
          #Need to account for playlists deleted from spotify side
           for playlist in playlists:
-               
-               query="SELECT EXISTS(SELECT id FROM playlists WHERE id = %s)"
-               mycursor.execute(query,(playlist.id,))
-               results=mycursor.fetchone()
-               count=results[0]
-               if count == 0:
-                  #print("HREF ",playlist.href,"NAME ",playlist.name)
-                  mycursor.execute("INSERT INTO playlists (id,name,href) VALUES (%s,%s,%s)",(playlist.id,playlist.name,playlist.href))
-                  db.commit()
+          
+           query="SELECT EXISTS(SELECT id FROM playlists WHERE plist_id = %s)"
+           mycursor.execute(query,(playlist.plist_id,))
+           results=mycursor.fetchone()
+           count=results[0]
+           if count == 0:
+               #print("HREF ",playlist.href,"NAME ",playlist.name)
+               mycursor.execute("INSERT INTO playlists (plist_id,name,href) VALUES (%s,%s,%s)",(playlist.plist_id,playlist.name,playlist.href))
+               db.commit()
           print("------Playlists Updated--------")    
 if __name__ == "__main__":
     try:
@@ -181,9 +195,11 @@ if __name__ == "__main__":
             mycursor = db.cursor()#(dictionary=True)
             spotify=PlaylistAggregator(client_id,client_secret,spotify_user_id)
             spotify.spotifyLogin()
-            #spotify.getPlaylists()
+            spotify.getPlaylists()
             #spotify.updatePlaylists()
-            spotify.getSongsFromPlaylist("Summatime jawns")
+            for playlist in playlists:
+               spotify.getSongsFromPlaylist(playlist.name)
+            spotify.updateTracks()
             #spotify.getSongFeatures('2Kqkhx3s12R2Vzxtv2loh5')
             print()
             #spotify.getSongFeatures('2Kqkhx3s12R2Vzxtv2loh5')
