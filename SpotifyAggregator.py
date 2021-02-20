@@ -5,14 +5,16 @@ import os
 import mysql.connector
 import string
 from urllib.parse import urlencode
-import urllib
-import config
+from config import MYSQLpassword
 from SpotifySecrets import spotify_user_id,client_id,client_secret,getToken
 from mysql.connector import  errorcode
 access_token='BLANK'
 global play
 playlists = []
 tracks = []
+
+def notify(title,text):
+    os.system(""" osascript -e 'display notification "{}"' with""".format(text,title))
 
 class Track(object):
      def __init__(self,name,id,artists,plist_id,href,album_id):
@@ -144,24 +146,39 @@ class PlaylistAggregator(object):
                playlistJson=getPlaylist.json()
                items = playlistJson['items']
                for item in items:
-                    print(f"Track - {i}: ")
-                    all_artists=item['track']['artists']
-                    artists=''
-                    track=item['track']
-                    for artist in all_artists:
-                         artists = artists + artist['name'] + " "
-                    track_obj=Track(track['name'],track['id'],artists,plist_id,track['href'],track['album']['id'])
-                    tracks.append(track_obj)
-                    i=i+1
+                    if item is not None:
+                         print(f"Track - {i}: ")
+                         try:
+                              all_artists=item['track']['artists']
+                              track=item['track']
+                              href=item['track']['href']
+                              album=track['album']
+                              name=track['name']
+                              id=track['id']
+                         except: all_artists = None
+                         artists=''
+                         
+                         if all_artists and track and href and album and name and id is not None:
+                              if all_artists:
+                                   for artist in all_artists:
+                                        artists = artists + artist['name'] + " "
+                              track_obj=Track(track['name'],track['id'],artists,plist_id,track['href'],track['album']['id'])
+                              tracks.append(track_obj)
+                         else:
+                              pass
+                         i=i+1
           except requests.exceptions.HTTPError as err:
                print(err.response.text)
           except requests.exceptions.ConnectionError as err:
                print(err.response.text)
-
           offset=offset +100
+
+    def addToSpotify(self):
+         pass
+
     def updateTracks(self):
          for track in tracks:
-
+          if track:
            query="SELECT EXISTS(SELECT id FROM tracks WHERE id = %s)"
            mycursor.execute(query,(track.id,))
            results=mycursor.fetchone()
@@ -169,25 +186,32 @@ class PlaylistAggregator(object):
            if count == 0:
                mycursor.execute("INSERT INTO tracks (plist_id,name,href,id,album_id,artists) VALUES (%s,%s,%s,%s,%s,%s)",(track.plist_id,track.name,track.href,track.id,track.album_id,track.artists))
                db.commit()
-         print("------Tracks Updated--------")      
+          else:
+               pass
+         print("------ {} Tracks Updated--------".format(len(tracks)))
+         notify("Spotipy","-->Tracks updated<---")         
 
     def updatePlaylists(self):
          #Need to account for playlists deleted from spotify side
-          for playlist in playlists:
-          
-           query="SELECT EXISTS(SELECT id FROM playlists WHERE plist_id = %s)"
-           mycursor.execute(query,(playlist.plist_id,))
-           results=mycursor.fetchone()
-           count=results[0]
-           if count == 0:
-               #print("HREF ",playlist.href,"NAME ",playlist.name)
-               mycursor.execute("INSERT INTO playlists (plist_id,name,href) VALUES (%s,%s,%s)",(playlist.plist_id,playlist.name,playlist.href))
-               db.commit()
-          print("------Playlists Updated--------")    
+          if playlists:
+               for playlist in playlists:
+               
+                    query="SELECT EXISTS(SELECT plist_id FROM playlists WHERE plist_id = %s)"
+                    mycursor.execute(query,(playlist.plist_id,))
+                    results=mycursor.fetchone()
+                    count=results[0]
+                    if count == 0:
+                         mycursor.execute("INSERT INTO playlists (plist_id,name,href) VALUES (%s,%s,%s)",(playlist.plist_id,playlist.name,playlist.href))
+                         db.commit()
+               print("------ {} Playlists  Updated--------".format(len(playlists)))
+               notify("Spotipy","--> Playlists updated<---")  
+          else:
+               pass  
+
 if __name__ == "__main__":
     try:
        db = mysql.connector.connect(
-         host="localhost",user="mikemuponda",passwd=base64.b64decode(config.MYSQLpassword).decode("utf-8"),
+         host="localhost",user="mikemuponda",passwd=base64.b64decode(MYSQLpassword).decode("utf-8"),
          database="test",port=3306 ,auth_plugin='mysql_native_password',charset = 'utf8mb4'
        )
        if db.is_connected()==True:
@@ -196,10 +220,10 @@ if __name__ == "__main__":
             spotify=PlaylistAggregator(client_id,client_secret,spotify_user_id)
             spotify.spotifyLogin()
             spotify.getPlaylists()
-            #spotify.updatePlaylists()
-            for playlist in playlists:
-               spotify.getSongsFromPlaylist(playlist.name)
-            spotify.updateTracks()
+            spotify.updatePlaylists()
+            #for playlist in playlists:
+            #  spotify.getSongsFromPlaylist(playlist.name)
+            #spotify.updateTracks()
             #spotify.getSongFeatures('2Kqkhx3s12R2Vzxtv2loh5')
             print()
             #spotify.getSongFeatures('2Kqkhx3s12R2Vzxtv2loh5')
