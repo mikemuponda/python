@@ -14,12 +14,12 @@ from config import EMAIL
 
 
 jobs = []
-
-def job(self,title,summary,location,company):
-  self.title=title
-  self.summary=summary
-  self.location=location
-  self.company=company
+class Job (object):
+  def __init__(self,title,summary,location,company):
+    self.title=title
+    self.summary=summary
+    self.location=location
+    self.company=company
 
 
 options = Options()
@@ -49,20 +49,16 @@ try:
          
 
     while (driver.find_elements_by_css_selector("#resultsCol > nav > div > ul > li:nth-child(7) > a") and page < 5):
-      #ignored_exceptions=(NoSuchElementException,StaleElementReferenceException,)
-      
-      #listings = driver.find_elements_by_xpath('//div[contains(@class,"jobsearch-SerpJobCard") and contains(@class,"unifiedRow") and contains(@class,"row") and contains(@class,"result") and contains(@class,"clickcard")]')
+     
       driver.implicitly_wait(random.randint(0, 4))
+      butt=driver.find_element_by_css_selector('#popover-x > button')
+      if butt:
+          butt.click()
       page = page + 1
       if (driver.find_elements_by_css_selector("#resultsCol > nav > div > ul > li:nth-child(7) > a")):
          wait=WebDriverWait(driver,10).until(EC.presence_of_element_located((By.XPATH,'//div[contains(@class,"jobsearch-SerpJobCard") and contains(@class,"unifiedRow") and contains(@class,"row") and contains(@class,"result") and contains(@class,"clickcard")]')))
          listings = driver.find_elements_by_xpath('//div[contains(@class,"jobsearch-SerpJobCard") and contains(@class,"unifiedRow") and contains(@class,"row") and contains(@class,"result") and contains(@class,"clickcard")]')
-         #listings = WebDriverWait(driver,3,ignored_exceptions=ignored_exceptions)\
-         #.until(EC.presence_of_all_elements_located((By.XPATH, '//div[contains(@class,"jobsearch-SerpJobCard") and contains(@class,"unifiedRow") and contains(@class,"row") and contains(@class,"result") and contains(@class,"clickcard")]')))
-         #print(listings[0].text)
-         butt=driver.find_element_by_css_selector('#popover-x > button')
-         if butt:
-          butt.click()
+         
 
          for listing in listings:
               jobSummary=listing.find_element_by_xpath('.//div[@class="summary"]/ul').text
@@ -74,20 +70,18 @@ try:
               #jobLocation=listing.find_elements_by_css_selector('div.sjcl > div.location.accessible-contrast-color-location')
               #jobLocation=listing.find_element_by_xpath('.//div[@class="sjcl"]/div[contains(@class,"location") and contains(@class,"accessible-contrast-color-location")]')
               jobLocation=listing.find_elements_by_xpath('.//div[@class="sjcl"]/span[contains(@class,"location") and contains(@class,"accessible-contrast-color-location")]')
-              print(jobTitle)
-              print(jobSummary)
-              print(jobCompany)
+    
               if jobRating:
-                print(jobRating[0].text)
+                jobrating=jobRating[0].text
               else:
                     jobRating=0
               
               location=""
-              #if jobLocation
               if jobLocation:
                  location=jobLocation[0].text
-              print("---------------------")
-              #resultsCol > nav > div > ul > li:nth-child(6)
+
+              job_entry=Job(jobTitle,jobSummary,location,jobCompany)
+              jobs.append(job_entry)
          try:
              wait=WebDriverWait(driver,10).until(EC.presence_of_element_located((By.CSS_SELECTOR,"#resultsCol > nav > div > ul > li:nth-child(7) > a")))
              if wait:
@@ -96,7 +90,9 @@ try:
              break
          except ElementNotInteractableException:
              print("ELEMENT NOT INTERACTABLE")
-    
+    for job in jobs:
+          print(job.__dict__)
+          print("------------------------------")
         
 finally: 
   driver.quit()
